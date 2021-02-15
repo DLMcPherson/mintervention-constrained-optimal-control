@@ -36,7 +36,7 @@ def iterative_LQR(seed_states,seed_control,timestep_length, dynamics,runcost,ter
         KN, kN = solveLocalLQR(oldStates,oldControl, dynamics,runcost,terminal_cost, timestep_length,N, lamb)
 
         # Simulate the result of this time-varying LQR control policy on the true non-linear dynamics
-        for armijo_step in np.append(1/np.power(2.0,np.arange(-2,5)),0): # test out a variety of feedforward gains
+        for armijo_step in np.append(1/np.power(2.0,np.arange(-2,1)),0): # test out a variety of feedforward gains
             cost, states, control = assessControlUpdate(oldControl,oldStates,KN,kN, runcost,terminal_cost, z0,dynamics,N,timestep_length, armijo_step,step_size)
             #print(70000,armijo_step,cost)
             # Stop Armijo backtracking when cost improves over previous
@@ -73,7 +73,7 @@ def iterative_LQR(seed_states,seed_control,timestep_length, dynamics,runcost,ter
 
 
     # Return the control trace
-    return(states)
+    return(states, control)
 
 def iterative_LegibleLQR(seed_states,seed_control,timestep_length, dynamics,runcost,terminal_cost, dynamicsLarger,runcostLarger,terminal_costLarger, step_size=1,ITER_NUM=10,starting_regularizer=1,alwaysCheck=True,neverRetreat=False):
 
@@ -97,7 +97,8 @@ def iterative_LegibleLQR(seed_states,seed_control,timestep_length, dynamics,runc
     ContainedCost = ContainedCost + timestep_length*terminal_cost.f(states[:,N])
     LargerCost = LargerCost + timestep_length*terminal_costLarger.f(states[:,N])
     cost = ContainedCost - LargerCost
-    cost = np.exp(ContainedCost) / (np.exp(ContainedCost) + np.exp(LargerCost)) # treating the partitions as equal (patently false)
+    #cost = np.exp(ContainedCost) / (np.exp(ContainedCost) + np.exp(LargerCost)) # treating the partitions as equal (patently false)
+    cost = ContainedCost
 
     print("Initialization's cost is ",cost[0,0])
     # ==================== iterative Linear Quadratic Regulator Optimization ================== #
@@ -125,16 +126,17 @@ def iterative_LegibleLQR(seed_states,seed_control,timestep_length, dynamics,runc
 
             # estimate the legibility equivalent objective
             cost = ContainedCost - LargerCost
-            cost = np.exp(ContainedCost) / (np.exp(ContainedCost) + np.exp(LargerCost)) # treating the partitions as equal (patently false)
+            #cost = np.exp(ContainedCost) / (np.exp(ContainedCost) + np.exp(LargerCost)) # treating the partitions as equal (patently false)
+            cost = ContainedCost
 
             # Stop Armijo backtracking when cost improves over previous
-            if(oldCost - cost > 0):
+            if(oldCost - cost > -10):
                 break
 
         print(iLQR_iterations,cost[0,0])
 
     # Return the control trace
-    return(states)
+    return(states,control)
 
 def solveLocalLQR(oldStates,oldControl, dynamics,runcost,terminal_cost, timestep_length,N, lamb):
     # Linearize the dynamics around the previous trajectory
@@ -174,7 +176,7 @@ def solveLocalLQR(oldStates,oldControl, dynamics,runcost,terminal_cost, timestep
 def assessControlUpdate(oldControl,oldStates,KN,kN, runcost,terminal_cost, z0,dynamics,N,timestep_length, armijo_step,step_size):
     # Clear out the trajectory, control trace, and cost
     cost = 0
-    control = np.zeros((dynamics.dimU,N+1))
+    control = np.zeros((dynamics.dimU,N))
     states = np.zeros((dynamics.dimZ,N+1))
     # Initialize state
     states[:,0] = z0

@@ -87,6 +87,15 @@ class GriddedLevelSetFunction(LevelSetFunctionABC):
             gradient[ii] = (self.value(queryState + offset) - self.value(queryState - offset))/difference
         return(gradient)
 
+    def hessian(self,queryState):
+        hessian = np.zeros((self.dim,self.dim))
+        for ii,difference in enumerate(self.gdx):
+            offset = np.zeros(self.dim)
+            offset[ii] = difference/2
+            hessian[ii] = (self.gradient(queryState + offset) - self.gradient(queryState - offset))/difference
+        hessian = 0.5 * (hessian + hessian.transpose())
+        return(hessian)
+
     def indexedValue(self,queryIndex):
         """Returns the value of the level set at the given query state
 

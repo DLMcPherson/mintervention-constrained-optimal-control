@@ -322,8 +322,6 @@ class TerminalCost(object):
 
         Args:
             state (np.array): state at which to evaluate the terminal cost
-            control (np.array): exogenous (control) input at which to evaluate the terminal cost
-            timestep (int): current timestep (for time-varying costs)
         """
         return(self.cost.f(state,0,0))
 
@@ -332,8 +330,6 @@ class TerminalCost(object):
 
         Args:
             state (np.array): state at which to evaluate the terminal cost
-            control (np.array): exogenous (control) input at which to evaluate the terminal cost
-            timestep (int): current timestep (for time-varying costs)
 
         Returns:
             Hessian (np.matrix): second derivative with dimension z by z, where z is the dimension of the state
@@ -348,8 +344,6 @@ class TerminalCost(object):
 
         Args:
             state (np.array): state at which to evaluate the terminal cost
-            control (np.array): exogenous (control) input at which to evaluate the terminal cost
-            timestep (int): current timestep (for time-varying costs)
         """
         return(self.cost.deriv_state(state,0,0))
 
@@ -358,3 +352,37 @@ class TerminalCost(object):
 
     def __mul__(self, scalar):
         return TerminalCost(ScaledRunningCost(self.cost,scalar))
+
+class costToGoLS(object):
+    def __init__(self,levelset):
+        self.levelset = levelset
+
+    def f(self,state):
+        """Terminal cost for optimal control problem
+
+        Args:
+            state (np.array): state at which to evaluate the terminal cost
+        """
+        return(self.levelset.value(state).reshape(1,1) )
+
+    def deriv_statestate(self,state):
+        """Second derivative of terminal cost with respect to state
+
+        Args:
+            state (np.array): state at which to evaluate the terminal cost
+
+        Returns:
+            Hessian (np.matrix): second derivative with dimension z by z, where z is the dimension of the state
+                vector
+
+        This method is used to produce a second-order Taylor approximation of the cost around a guess trajectory.
+        """
+        return(self.levelset.hessian(state) )
+
+    def deriv_state(self,state):
+        """First derivative of terminal cost with respect to state
+
+        Args:
+            state (np.array): state at which to evaluate the terminal cost
+        """
+        return(self.levelset.gradient(state).reshape(self.levelset.dim,1) )

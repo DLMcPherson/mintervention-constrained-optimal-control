@@ -198,6 +198,68 @@ class DubinsCarBrakelessDynamics(DynamicsABC):
         super(DubinsCarBrakelessDynamics,self).__init__(3,1)
 
 # Double integrator dynamics
+class DoubleIntegrator(DynamicsABC):
+
+    """
+    Encodes double integrator dynamics
+
+    Operates on a four-dimensional state space (z) with numbered states encoding:
+
+      1. Horizontal position (x)
+      2. Horizontal velocity (v)
+
+    with the form:
+
+    dx/dt = v
+    dv/dt = u_0
+    """
+
+    def f(self,state,control):
+        """Dynamic drift function of state over time
+
+        Args:
+            state (np.array): state at which to evaluate the dynamics
+            control (np.array): exogenous (control) input at which to evaluate the dynamics
+
+        Returns:
+            derivative (np.array): the time derivative of state over time according to these dynamics
+        """
+        Az = np.array([state[1],0])
+        Bu = np.array([0,control[0]])
+        derivative = Az + Bu
+        return(derivative)
+
+    def deriv_x(self,state,control):
+        """Derivative of dynamics with respect to state
+
+        Args:
+            state (np.array): state at which to evaluate the dynamics
+            control (np.array): exogenous (control) input at which to evaluate the dynamics
+
+        Returns:
+            A (np.array): partial derivative of dynamics with respect to state
+        """
+        A = np.zeros((2,2))
+        A[0,1] = 1
+        return(A)
+
+    def deriv_u(self,state,control):
+        """Derivative of dynamics with respect to control
+
+        Args:
+            state (np.array): state at which to evaluate the dynamics
+            control (np.array): exogenous (control) input at which to evaluate the dynamics
+
+        Returns:
+            B (np.array): partial derivative of dynamics with respect to state
+        """
+        B = np.array([[0],[1]])
+        return(B)
+
+    def __init__(self):
+        super(DoubleIntegrator,self).__init__(2,1)
+
+# Double double integrator dynamics
 class DoubleDoubleIntegrator(DynamicsABC):
 
     """
@@ -348,6 +410,8 @@ class MinimumInterventionDynamicsWrapper(DynamicsABC):
         self.wrappedDynamic = _wrappedDynamic
         self.safeSet = _safeSet
         self.uMax = 1.0
+        #self.tightness = 40
+        self.epsilon = 2
         super(MinimumInterventionDynamicsWrapper,self).__init__(_wrappedDynamic.dimZ,_wrappedDynamic.dimU)
 
     def f(self,state,control):
@@ -360,20 +424,25 @@ class MinimumInterventionDynamicsWrapper(DynamicsABC):
         Returns:
             derivative (np.array): the time derivative of state over time according to these dynamics
         """
-        # Calculate the safe action
-        safeControl = np.zeros(control.shape)
-        gradV = self.safeSet.gradient(state)
-        # We assume that the wrapped dynamic is control affine, so that the closed form optimal control
-        # is to bang-bang within the control bounds dictated by the sign of the control coefficient multiplied by the gradient
-        controlCoefficient = self.wrappedDynamic.deriv_u(state,control)
-        hamiltonianControlCoefficient = np.dot(gradV,controlCoefficient)
-        safeControl = np.sign(hamiltonianControlCoefficient)*self.uMax
-        #safeControl.reshape((1,))
-
         interpolation = self.logistic(self.safeSet.value(state))
-        interpolatedControl = interpolation * control + (1-interpolation) * safeControl
-        xdot = self.wrappedDynamic.f(state,interpolatedControl)
-        return(xdot)
+        if(interpolation == 1):
+            xdot = self.wrappedDynamic.f(state,control)
+            return(xdot)
+        else:
+            # Calculate the safe action
+            safeControl = np.zeros(control.shape)
+            gradV = self.safeSet.gradient(state)
+            # We assume that the wrapped dynamic is control affine, so that the closed form optimal control
+            # is to bang-bang within the control bounds dictated by the sign of the control coefficient multiplied by the gradient
+            controlCoefficient = self.wrappedDynamic.deriv_u(state,control)
+            hamiltonianControlCoefficient = np.dot(gradV,controlCoefficient)
+            safeControl = np.sign(hamiltonianControlCoefficient)*self.uMax
+            #safeControl.reshape((1,))
+
+            interpolationVector = np.array(hamiltonianControlCoefficient < 1e-14) * interpolation
+            interpolatedControl = interpolationVector * control + (1-interpolationVector) * safeControl
+            xdot = self.wrappedDynamic.f(state,interpolatedControl)
+            return(xdot)
 
     def deriv_x(self,state,control):
         """Derivative of dynamics with respect to state
@@ -417,14 +486,32 @@ class MinimumInterventionDynamicsWrapper(DynamicsABC):
         return(self.wrappedDynamic.deriv_u(state,control)*self.logistic(self.safeSet.value(state)))
 
     def logistic(self,value):
-        tightness = 40
-        knee_position = -5
-        interpolation =  1/(np.exp(-tightness*value-knee_position)+1)
+        veps = value * self.epsilon
+        interpolation = 6 * np.power(veps,5) - 15 * np.power(veps,4) + 10 * np.power(veps,3)
+        if (veps > 1):
+          interpolation = 1
+        elif (veps < 0):
+          interpolation = 0
         return(interpolation)
 
     def deriv_logistic(self,value):
-        tightness = 40
-        knee_position = -5
-        exponential = np.exp(-tightness*value-knee_position)
-        interpolation =  tightness*exponential/np.power((exponential+1),2)
+        veps = value * self.epsilon;
+        interpolation = (30 * np.power(veps,4) - 60 * np.power(veps,3) + 30 * np.power(veps,2) ) * self.epsilon;
+        if (veps > 1):
+          interpolation = 0
+        elif (veps < 0):
+          interpolation = 0
         return(interpolation)
+
+'''
+    def logistic(self,value):
+        knee_position = -5
+        interpolation =  1/(np.exp(-self.tightness*value-knee_position)+1)
+        return(interpolation)
+
+    def deriv_logistic(self,value):
+        knee_position = -5
+        exponential = np.exp(-self.tightness*value-knee_position)
+        interpolation =  self.tightness*exponential/np.power((exponential+1),2)
+        return(interpolation)
+'''
