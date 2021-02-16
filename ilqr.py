@@ -36,7 +36,7 @@ def iterative_LQR(seed_states,seed_control,timestep_length, dynamics,runcost,ter
         KN, kN = solveLocalLQR(oldStates,oldControl, dynamics,runcost,terminal_cost, timestep_length,N, lamb)
 
         # Simulate the result of this time-varying LQR control policy on the true non-linear dynamics
-        for armijo_step in np.append(1/np.power(2.0,np.arange(-2,1)),0): # test out a variety of feedforward gains
+        for armijo_step in np.append(1/np.power(2.0,np.arange(-2,5)),0): # test out a variety of feedforward gains
             cost, states, control = assessControlUpdate(oldControl,oldStates,KN,kN, runcost,terminal_cost, z0,dynamics,N,timestep_length, armijo_step,step_size)
             #print(70000,armijo_step,cost)
             # Stop Armijo backtracking when cost improves over previous
